@@ -1,0 +1,239 @@
+---
+title: "Predicting Personal Activity Performance/Form"
+author: "David Russo"
+date: "Wednesday, June 10, 2015"
+output: html_document
+---
+
+# Introduction
+Personal activity devices such as Jawbone Up, Nike FuelBand, and Fitbit, are commonly used to collect large amounts of data that quantify how MUCH of a particular activity a person performs. The research question of this study is whether we can train models to predict how WELL, regarding form, a person is performing a particular activity or exercise. The answer is yes, given of course the collection of the right data.
+<br>
+This analysis and documentation was done as part of a study to be submitted in a Johns Hopkins University Machine Learning Course, which is part of their larger 10-course Data Science Specialization.
+
+# The Data
+The data used in this study, collected and also used by the authors of a related study credited below, provides motion related information collected from accelerometers on the belt, forearm, arm, and dumbell of participants performing one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl.
+<br>
+There were Six male participants, between 20-28 years of age, performing the Curl in five different fashions, becoming the 'classe' variable in the training set: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). While performing the activity correctly and incorrectly, the motion data was being collected.
+<br>
+The goal of this analysis is to train models on this data that describes the manner in which the exercise is being performed, and whether it was done correctly or not, in order to ultimately predict the manner in which out-of-sample cases are performing the same exercise, given the same data about their motion.
+<br>
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+<br>
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+<br>
+Credit for the data goes out to the authors of this realted study: Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements.
+<br>
+More information is available from the website: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)
+
+## Libraries
+```{r libraries}
+library(caret)
+```
+# Read and Study the Data
+
+```{r readData}
+harTrain <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+harTest <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+Look at the distribution of the predicted variable 'classe'
+
+```{r plotClasse, echo=FALSE}
+plot(harTrain$classe)
+```
+
+Find the number and percentage of NA cells 
+```{r NAs}
+(sum1 <- sum(is.na(harTrain)))
+(pct1 <- sum1/(nrow(harTrain)*ncol(harTrain)))
+```
+
+Find the number and percentage of "" cells 
+```{r emptyCells}
+empties <- c()
+for (i in 1:ncol(harTrain))
+{
+      empties <- c(empties,sum(harTrain[i] == ""))     
+}
+(sum2 <- sum(empties, na.rm=TRUE))
+(pct2 <- sum2/(nrow(harTrain)*ncol(harTrain)))
+```
+
+With 40% of cells as NA and 20% of "" cells, I will eliminate varaibles with too little data
+
+# Data Transformation
+Convert all "" into NA
+```{r emptyToNA}
+harTrain[harTrain == ""] <- NA
+```
+Eliminate variables with 75% or more as NA values
+```{r reduce1}
+harTrain <- harTrain[,colSums(is.na(harTrain)) < 0.75 * nrow(harTrain)]
+```
+This removed 100/160 variables from the data set
+
+Eliminate the first 2 columns as they are ID variables: X and user_name
+```{r reduce2}
+harTrain <- harTrain[,-c(1,2)]
+```
+Check for covariates with near zero variance
+```{r nearZero}
+library(caret)
+(NZV <- nearZeroVar(harTrain, saveMetrics=TRUE))
+```
+One of the remaining variables has near zero variance, so only keep the rest - those with nzv=FALSE
+```{r reduce3}
+harTrain <- harTrain[,which(NZV$nzv==FALSE)]
+```
+Finished variable reduction in harTrain, now remove those same variables from harTest 
+```{r reduceTest}
+harTest <- harTest[,which(names(harTest) %in% names(harTrain))]
+```
+<br>
+
+# Prediction Algorithm Design
+
+The training set provided is very large (almost 20K observations), compared to a small test set (20 observations). The size of the training set prohibits reasonable run time, so I split the training set into 4 equal subsets: sub1, sub2, sub3, sub4. I train different models on sub1, then run the best models on the other three, and average the 4 in-sample errors to predict the out-of-sample error.
+<br>
+## Subsetting the Training Set
+```{r subsets}
+set.seed(123)
+index <- createDataPartition(y = harTrain$classe, p = 0.25, list = FALSE)
+sub1 <- harTrain[index,]
+remaining <- harTrain[-index,]
+set.seed(123)
+index <- createDataPartition(y = remaining$classe, p = 0.333, list = FALSE)
+sub2 <- remaining[index,]
+remaining <- remaining[-index,]
+set.seed(123)
+index <- createDataPartition(y = remaining$classe, p = 0.5, list = FALSE)
+sub3 <- remaining[index,]
+sub4 <- remaining[-index,]
+```
+## KNN on sub1 Data Set
+Out of the box
+```{r knn1}
+set.seed(123)
+knnFit1 <- train(classe ~ ., data = sub1, method = "knn")
+knnFit1 
+```
+In-sample accuracy is very low at 23% (77% in-sample error)
+<br>
+Incorporating preprocessing and cross validation
+```{r knn2}
+set.seed(123)
+knnFit2 <- train(classe ~ ., data = sub1, method = "knn", 
+                trControl = trainControl(method="repeatedcv",repeats = 3),
+                preProcess = c("center","scale"))
+knnFit2
+```
+In-sample accuracy is much better at 93% (7% in-sample error)
+
+## Classification Trees on sub1 Data Set
+
+Out of the Box
+```{r tree1}
+set.seed(123)
+treeFit1 <- train(classe ~ ., method = "rpart", data = sub1)
+treeFit1
+```
+In-sample accuracy is low at 52% (48% in-sample error)
+<br>
+Incorporating preprocessing and cross validation
+```{r tree2}
+set.seed(123)
+treeFit2 <- train(classe ~ ., method = "rpart", data = sub1,
+                  trControl = trainControl(method="repeatedcv",repeats = 3),
+                  preProcess = c("center","scale"))
+treeFit2
+```
+In-sample accuracy stayed at 52% (48% in-sample error)
+## Random Forest on sub1 Data Set
+Out of the Box
+```{r forest1}
+set.seed(123)
+rfFit1 <- train(classe ~ ., method = "rf", data = sub1, prox = TRUE)
+rfFit1
+```
+In-sample accuracy at 97.4% where mtry=2 and 99% where mtry=38 (2.6% and 1% error)
+<br>
+Incorporating preprocessing and cross validation
+```{r forest2}
+set.seed(123)
+rfFit2 <- train(classe ~ ., method = "rf", data = sub1, prox = TRUE,
+                trControl = trainControl(method="repeatedcv",repeats = 3),
+                preProcess = c("center","scale"))
+rfFit2
+```
+In-sample accuracy at 98% where mtry=2 and 99.4% where mtry=38 (2% and 0.6% error)
+
+The two best models were knnFit2 and rfFit1 (rf2Fit increase in accuracy not significant). The random forest model (rfFit1) had better results (97% vs 93%),but required 40-fold more time and memory. I will compare their performance on the other three subsets of the overall training set.
+
+## knnFit2 Performance across the other three Subsets (sub2 - sub4)
+```{r knnPred1}
+predictions <- predict(knnFit2, newdata = sub2)
+confusionMatrix(predictions, sub2$classe)
+```
+0.9339 accuracy
+```{r knnPred2}
+predictions <- predict(knnFit2, newdata = sub3)
+confusionMatrix(predictions, sub3$classe)
+```
+0.9431 accuracy
+```{r knnPred3}
+predictions <- predict(knnFit2, newdata = sub4)
+confusionMatrix(predictions, sub4$classe)
+```
+0.9376 accuracy
+<br>
+Averaging the knnFit2 error across the three subsets
+```{r knnAvg}
+mean(c(0.9339, 0.9431, 0.9376))
+```
+0.9382 average accuracy, 6.18% predicted out-of-sample error
+
+## rfFit1 Performance across the other three Subsets (sub2 - sub4)
+```{r forestPred1}
+predictions <- predict(rfFit1, newdata = sub2)
+confusionMatrix(predictions, sub2$classe)
+```
+0.9945 accuracy
+```{r forestPred2}
+predictions <- predict(rfFit1, newdata = sub3)
+confusionMatrix(predictions, sub3$classe)
+```
+0.9953 accuracy
+```{r forestPred3}
+predictions <- predict(rfFit1, newdata = sub4)
+confusionMatrix(predictions, sub4$classe)
+```
+0.9931 accuracy
+<br>
+Averaging the knnFit2 error across the three subsets
+```{r forestAvg}
+mean(c(0.9945, 0.9953, 0.9931))
+```
+0.9943 average accuracy, 0.57% predicted out-of-sample error
+<br>
+The average error rate across the other data subsets (predicted out-of-sample error) is 6.18% using the knn algorithm, and o.57% using the random forest algorithm. I will use the random forest model to submit my solutions for the predicted class on the 20 observations in the test set, but for curiosity I will predict using both models to see the difference.
+# Predictions
+
+## Apply rfFit1 to Predict on the Test Data
+```{r forestTestSet}
+testPredict <- predict(rfFit1, newdata = harTest)
+testPredict
+```
+## Apply knnFit2 to Predict on the Test Data
+```{r knnTestSet}
+testPredict2 <- predict(knnFit2, newdata = harTest)
+testPredict2
+```
+<br>
+```{r comparison}
+sum(testPredict != testPredict2)
+```
+19 predictions out of 20 were the same between the two algorithms.
+
+
