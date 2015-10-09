@@ -1,0 +1,158 @@
+
+import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.StringTokenizer;
+
+public class StudentGrades
+{
+	public static int getChoice()
+	{
+		int choice;
+		Scanner scanner = new Scanner(System.in);
+		
+		do
+		{
+			System.out.println("*************************************");
+			System.out.println("**            MAIN MENU            **");
+			System.out.println("**---------------------------------**");
+			System.out.println("** 1 - Write Student Information   **");
+			System.out.println("** 2 - Search Student Directory    **");
+			System.out.println("** 3 - Exit                        **");
+			System.out.println("**---------------------------------**");
+			System.out.println("ENTER CHOICE: ");
+			choice = scanner.nextInt();
+			if (choice < 1 || choice > 3)
+			{
+				System.out.println("**** Invalid choice(" + choice + "), please try again *****");
+				System.out.println("\n\n");
+			}
+		}
+		while (choice < 1 || choice > 3);
+	        
+		return choice;
+	}
+        public static void printResults(ArrayList matches) {
+            System.out.println("****************************");
+            System.out.println("Results: ");
+
+            for (int i = 0; i < matches.size(); i++)
+                System.out.println(matches.get(i));
+            System.out.println("****************************");
+        }
+	public static void searchInformation()
+	{
+            String another;
+            do {
+                Scanner sc = new Scanner(System.in);
+		// compare each field in separateFields[] for possible matches with the fields of search[].
+       		String [] search = searchData();
+		String fileName = "/Data/students.dat";
+		String[] allRecords = Presidents.readTextFile(fileName);      // but isn't allRecords one string rather than an array?
+                ArrayList<String>matches = new ArrayList();
+		for (int i = 0; i < allRecords.length; i++){
+                    StringTokenizer st1 = new StringTokenizer(allRecords[i], ",");
+                    String[] separateRecords = new String[st1.countTokens()];
+                    // loop through allRecords[], using StringTokenizer to break up each record in the file and put in separateRecords[] array
+			
+                    int j = 0;
+                    while (st1.hasMoreTokens()) {
+                        separateRecords[j] = st1.nextToken();
+			j++;
+                    }
+                    boolean match = true;
+                    for (j = 0; j < search.length; j++) {
+                        if (search[j].length() > 0) {
+                            if (!search[j].equals(separateRecords[j])) {
+                                match = false;	
+                                break;
+                            }
+                        }
+                    }
+                    if (match) {
+                        matches.add(allRecords[i]);
+                    }
+                }
+                printResults(matches);
+                System.out.print("Perform Another Search? ");
+		another = sc.next();
+            } while (another.equals("y"));
+	}
+	public static void writeInformation()
+	{
+		Scanner sc = new Scanner(System.in);
+		String another;
+                ArrayList<String>al = new ArrayList<String>();
+		String fileName = "/Data/students.dat";
+		do
+		{
+			String [] data = getData();
+                        String record = Presidents.arrayToString(data);
+                        al.add(record);
+			System.out.print("Enter Another Record? ");
+			another = sc.next();
+		} while (another.equals("y"));
+                String [] records = new String[al.size()];
+                for (int i = 0; i < records.length; i++)
+                    records[i] = al.get(i);
+		Presidents.writeTextFile(fileName, records);
+	}
+	
+	public static String [] getData()
+	{
+		Scanner sc = new Scanner(System.in);
+        
+        String [] data = new String[5];
+        
+        System.out.print("FIRST NAME: ");
+        data[0] = sc.nextLine() + ",";
+        System.out.print("LAST NAME: ");
+        data[1] = sc.nextLine() + ",";
+        System.out.print("MAJOR: ");
+        data[2] = sc.nextLine() + ",";
+        System.out.print("POINTS EARNED: ");
+        data[3] = sc.nextLine() + ",";
+        System.out.print("TOTAL POINTS: ");
+        data[4] = sc.nextLine();
+               
+        return data;
+	}
+	
+	public static String [] searchData()
+	{
+		Scanner sc = new Scanner(System.in);
+        
+        String [] search = new String[5];
+        
+        System.out.print("PLEASE ENTER ANY FIELD YOU KNOW, OR JUST HIT ENTER ");
+        System.out.print("FIRST NAME: ");
+        search[0] = sc.nextLine();
+        System.out.print("LAST NAME: ");
+        search[1] = sc.nextLine();
+        System.out.print("MAJOR: ");
+        search[2] = sc.nextLine();
+        System.out.print("POINTS EARNED: ");
+        search[3] = sc.nextLine();
+        System.out.print("TOTAL POINTS: ");
+        search[4] = sc.nextLine();
+               
+        return search;
+	}
+	
+	public static void main(String[] args)
+	{
+            int choice;
+            do {
+		choice = getChoice();
+		switch (choice) // switch statement is an alternative to using if/then/elseif statements
+		{
+                    case 1:
+                        writeInformation();
+                    break;
+                    case 2:
+                        searchInformation();
+                    break;
+                }
+                System.out.println("\n\n");
+            } while (choice != 3);
+        }
+}

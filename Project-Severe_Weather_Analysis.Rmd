@@ -1,0 +1,180 @@
+---
+title: "Health and Economoic Consequences of Severe Weather Events"
+author: "David Russo"
+date: "Thursday, July 24, 2014"
+output: html_document
+---
+<br>
+<br>
+
+## SYNOPSIS
+This study uses the storm database supplied by the U.S. National OCeanic and Atmospheric Administration (NOAA), which provides data on severe weather events from 1950 to 2011. The intent of the study is to determine, during this period of time, which events have been most harmful to the health of the poulation, and which have had the greatest total economic consequences. The results show that Tornados excede by almost 7 times any other event with regard to poulation health (fatalities and injuries), while Flooding tops the charts, by double, with regard to the economic consequences (property and crop damage). Tornados, first on the list for health, are also third on the list economically, following not as dramatically behind Floods(1) and Hurricanes(2). 
+<br>
+<br>
+
+## DATA PROCESSING
+We first set the working directory to that which has a "Data" folder containing the data file, and then read in the data in the following way.
+
+```{r}
+setwd("C:/Users/David/Classes/Coursera/JohnsHopkinsDataScienceSignatureTrack/Reproducible_Research/ProgAssign2")
+data <- read.table("./Data/repdata-data-StormData (1).csv.bz2", header=T, sep = ",")
+```
+
+We looked at the size of the data frame to get a sense of what we're working with.
+```{r}
+dim(data)
+```
+
+We looked at the number unique event types listed in the EVTYPE column
+```{r}
+length(unique(data$EVTYPE))
+```
+
+That seemed to be an unreasonable number of weather event types, so we looked a little closer to see what they were, and saw a number of ways that cleaning the data would reduce the number of event types. But before beggining to clean the data, we created a copy of the dataframe in order to keep the original pure.
+```{r}
+cleandata <- data
+```
+
+Then we changed the event names to all lower case, so that case is not a factor.
+```{r}
+cleandata$EVTYPE <- tolower(cleandata$EVTYPE)
+```
+
+Then we were ready to clean. One thing we saw was that there were 76 event types that were "summary of (date)".
+```{r}
+cleandata$EVTYPE[grepl("summary",cleandata$EVTYPE)]
+```
+
+We decided to remove those rows by by subsetting cleandata to be the data where "summary" is NOT in the EVTYPE.
+```{r}
+cleandata <- subset(cleandata,!(grepl("summary",cleandata$EVTYPE)))
+```
+
+We also saw groupings of event types that had very SIMILAR names to each other, or that seemed to be getting at the same general event type. We decided it would be best to unify these different but similar events under a common event name.
+```{r}
+cleandata$EVTYPE[grepl("wint",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("sleet",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("snow",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("freezing",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("frost",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("ice",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("hail",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("bliz",cleandata$EVTYPE)] <- "winter weather"
+cleandata$EVTYPE[grepl("aval",cleandata$EVTYPE)] <- "avalanche"
+cleandata$EVTYPE[grepl("flood",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("seas",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("surf",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("swells",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("wave",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("water",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("rip",cleandata$EVTYPE)] <- "flood"
+cleandata$EVTYPE[grepl("drought",cleandata$EVTYPE)] <- "drought"
+cleandata$EVTYPE[grepl("wind",cleandata$EVTYPE)] <- "wind"
+cleandata$EVTYPE[grepl("heat",cleandata$EVTYPE)] <- "heat"
+cleandata$EVTYPE[grepl("hurr",cleandata$EVTYPE)] <- "hurricane"
+cleandata$EVTYPE[grepl("thermia",cleandata$EVTYPE)] <- "hypothermia"
+cleandata$EVTYPE[grepl("lightning",cleandata$EVTYPE)] <- "lightning"
+cleandata$EVTYPE[grepl("thunder",cleandata$EVTYPE)] <- "thunder storm"
+cleandata$EVTYPE[grepl("tornado",cleandata$EVTYPE)] <- "tornado"
+cleandata$EVTYPE[grepl("fire",cleandata$EVTYPE)] <- "wild fire"
+```
+
+We then took another look at the number of, and names of, unique event types in this cleaned data set.
+```{r}
+length(unique(cleandata$EVTYPE))
+unique(cleandata$EVTYPE)
+```
+
+This looked much better, so we began to look at our study questions:
+
+Question 1: Across the United States, which types of events are most harmful with respect to population health?
+
+We took a sum of the FATALITIES and INJURIES variables over each EVTYPE, then added together the injuries + fatalities to create a new column quantifying the total harmful effect on health.
+```{r}
+library(plyr)
+sums <- ddply(cleandata, .(EVTYPE), summarize, Fatalities=sum(FATALITIES), Injuries=sum(INJURIES))
+sums$sum <- sums$Fatalities + sums$Injuries
+```
+
+For further simplification we reduced the number of event types by removing any rows that have sum=0. We first changed all zeros in the sum column to be NA, then removed all rows with NA in sum column.
+```{r}
+sums$sum[sums$sum==0] <- NA
+sums <- sums[complete.cases(sums),]
+dim(sums)
+```
+
+Lastly, to prepare for the results in the next section, we ordered the dataframe, descending, by the sum of harmful effect on health.
+```{r}
+ordered <- arrange(sums, desc(sum))
+```
+
+Question 2: Across the United States, which types of events have the greatest economic consequences?
+
+The variables that quantify economic consequences in dollars are PROPDMG(property damage) and CROPDMG(crop damage). They each have an additional corresponding variable of PROPDMGEXP and CROPDMGEXP, which are multipliers, where H=Hundred, K=Thousand, M=Million, and B=Billion. So we created new fields, PROPCASH and CROPCASH, which will combine the DMG and DMGEXP fields to create an actual numeric value.
+
+We subset the variables we need into a new data frame, just for ease of viewing.
+```{r}
+datasubset <- subset(cleandata,select=c(EVTYPE,PROPDMG,PROPDMGEXP,CROPDMG,CROPDMGEXP))
+```
+
+We created our new columns of actual numeric values with nested ifelse statements.
+```{r}
+datasubset$PROPCASH <- ifelse(datasubset$PROPDMGEXP=="H",datasubset$PROPDMG*100,
+                  ifelse(datasubset$PROPDMGEXP=="K",datasubset$PROPDMG*1000,
+                  ifelse(datasubset$PROPDMGEXP=="M",datasubset$PROPDMG*1000000,
+                  ifelse(datasubset$PROPDMGEXP=="B",datasubset$PROPDMG*1000000000,
+                  datasubset$PROPDMG))))
+              
+datasubset$CROPCASH <- ifelse(datasubset$CROPDMGEXP=="H",datasubset$CROPDMG*100,
+                  ifelse(datasubset$CROPDMGEXP=="K",datasubset$CROPDMG*1000,
+                  ifelse(datasubset$CROPDMGEXP=="M",datasubset$CROPDMG*1000000,
+                  ifelse(datasubset$CROPDMGEXP=="B",datasubset$CROPDMG*1000000000,
+                  datasubset$CROPDMG))))
+```
+
+We summed PROPCASH and CROPCASH over each EVTYPE, and added together the PropCash + CropCash, creating a new column quantifying the total economic impact.
+```{r}
+library(plyr)
+sums2 <- ddply(datasubset, .(EVTYPE), summarize, PropCash=sum(PROPCASH), CropCash=sum(CROPCASH))
+sums2$sum <- sums2$PropCash + sums2$CropCash
+```
+
+For further simplification we reduced the number of event types by removing any rows that have sum=0. We first changed all zeros in the sum column to be NA, then removed all rows with NA in sum column.
+```{r}
+sums2$sum[sums2$sum==0] <- NA
+sums2 <- sums2[complete.cases(sums2),]
+dim(sums2)
+```
+
+Lastly, to prepare for the results in the next section, we order the dataframe, descending, by the sum economic impact.
+```{r}
+ordered2 <- arrange(sums2, desc(sum))
+```
+<br>
+<br>
+
+## RESULTS
+<br>
+Question 1: Across the United States, the top 10 severe weather events that were most harmful with respect to population health are the following, with their associated number of injuries and fatalities, and a plot of their sum total effect on health.
+```{r}
+head(ordered,10)
+plotdata <- head(ordered,10) 
+library(ggplot2)
+q <- qplot(EVTYPE,sum,data=plotdata,geom="bar",
+           xlab="Event Type",
+           ylab="Fatalities + Injuries",
+           main="Top 10 Events Most Harmful to Population Health")
+q + theme(axis.text.x=element_text(angle=-90))
+```
+<br>
+Question 2: Across the United States, the top 10 severe weather events that had the greatest economic consequences are the following, with their associated property and crop damage, and a plot of their sum total dollar cost. 
+```{r}
+head(ordered2,10)
+plotdata2 <- head(ordered2,10) 
+library(ggplot2)
+q <- qplot(EVTYPE,sum,data=plotdata2,geom="bar",
+           xlab="Event Type",
+           ylab="Property + Crop Damage in Dollars",
+           main="Top 10 Events with Greatest Economic Consequences")
+q + theme(axis.text.x=element_text(angle=-90))
+```
